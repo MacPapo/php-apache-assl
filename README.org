@@ -1,0 +1,540 @@
+#+title: Relazione Progetto LAS Web
+#+author: Jacopo Costantini
+
+* Obiettivo Fase 1 - Web server Apache
+
+L'obiettivo è realizzare un web server Apache in grado di ospitare
+almeno due virtualhost protetti con HTTPS e di creare e proteggere una
+piccola form PHP. La guida è redatta per sistemi macOS e adotta
+Docker. Iniziamo con il passo preliminare dell'installazione delle
+dipendenze.
+
+** Passo 1: Installare le dipendenze necessarie
+
+Prima di procedere, assicurati di aver installato *Homebrew* o
+*MacPorts*. Per questa guida, adotteremo *Homebrew*.
+#+ATTR_LATEX: :options fontsize=\scriptsize
+#+begin_src shell
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+#+end_src
+Una volta installato *Homebrew*, procediamo ad installare *OpenSSL*
+che e' fondamentale per la creazione dei *certificati SSL* che
+utilizzeremo per il progetto.
+
+#+begin_src shell
+brew install openssl
+#+end_src
+Ora installiamo *Docker*, in questa guida lo installo tramite
+*Homebrew* e nella versione *Docker Desktop*
+
+#+begin_src shell
+brew install --cask docker
+#+end_src
+
+** Passo 2: Configurazione del progetto
+
+La struttura del nostro progetto sara' composta nel seguente modo
+
+#+begin_export latex
+\begin{verbatim}
+LAS/
+    Dockerfile
+    certs/
+        site1.crt
+        site1.key
+        site2.crt
+        site2.key
+    conf/
+        000-default.conf
+        default-ssl.conf
+    src/
+        site1/
+            index.php
+        site2/
+            index.php
+\end{verbatim}
+#+end_export
+
+- /certs/: Conterra' tutti i certificati dei nostri due host
+
+  + /site.crt/: Questo è il certificato pubblico SSL. Contiene la
+    "chiave pubblica" del server web ed è utilizzato da un client per
+    crittografare i dati che verranno inviati al server. Il
+    certificato pubblico, tra le altre informazioni, contiene i
+    dettagli del titolare del certificato e la firma dell'autorità di
+    certificazione che emette il certificato.
+
+  + /site.key/: Questo è un file di chiave privata SSL. Viene
+    utilizzato per decrittografare i dati che sono stati crittografati
+    utilizzando la chiave pubblica e deve essere mantenuto segreto. La
+    chiave privata è utilizzata dal server per decifrare i dati
+    crittografati dal client usando la chiave pubblica del server.
+
+- /conf/: Questa directory contiene i file di configurazione del
+  server web. In un contesto di server web Apache, la configurazione
+  dell'host virtuale (o "vhost") consente di servire diversi siti web
+  sulla stessa macchina. Ciascun sito web è identificato dal suo
+  dominio, e ciascuno può avere configurazioni di hosting specifiche.
+
+  + /000-default.conf/: Questo file contiene la configurazione di
+    default per gli host virtuali che operano su HTTP (porta
+    80). Generalmente, il file 000-default.conf è utilizzato per
+    definire il comportamento del server quando nessun altro sito
+    specificato nella configurazione corrisponde alla richiesta HTTP
+    ricevuta. Le impostazioni in questo file determinano come il
+    server gestirà le richieste HTTP e definiscono le impostazioni di
+    default per altri host virtuali a meno che non siano sovrascritte
+    in altre configurazioni specifiche di host virtuali.
+
+  + /default-ssl.conf/: Questo file è simile al 000-default.conf, ma è
+    specifico per la configurazione degli host virtuali che operano su
+    HTTPS (porta 443) e utilizzano SSL/TLS per la cifratura. Il
+    default-ssl.conf contiene dettagli su come configurare la
+    crittografia SSL/TLS, inclusi i percorsi ai certificati SSL (ad
+    es. site1.crt) e alle chiavi private (ad es. site1.key), nonché
+    ulteriori configurazioni relative all'host virtuale sicuro.
+
+- /src/: Conterra' i due siti con i relativi /index.php/
+Iniziamo la configurazione del progetto partendo da una cartella che
+chiamiamo /LAS/
+#+begin_src shell
+mkdir LAS
+#+end_src
+Ora, creiamo le directory, come abbiamo descritto in precedenza:
+#+begin_src shell
+mkdir -p LAS/certs
+mkdir -p LAS/conf
+mkdir -p LAS/src/site1
+mkdir -p LAS/src/site2
+#+end_src
+Ora che abbiamo la struttura possiamo passare al prossimo passo
+#+CAPTION: Raffigurazione ad albero del progetto.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot16.png]]
+** Passo 3: Creare i certificati SSL
+Per generare certificati SSL auto-firmati, utilizzeremo
+*openssl*. Ecco un comando esemplificativo e una dettagliata
+spiegazione delle opzioni utilizzate:
+#+ATTR_LATEX: :options fontsize=\scriptsize
+#+begin_src shell
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout LAS/certs/site1.key -out LAS/certs/site1.crt
+#+end_src
+
+Spiegazione del comando:
+1. *openssl*: OpenSSL è un toolkit per l'SSL (Secure Sockets Layer) e
+   TLS (Transport Layer Security) e una libreria generale per la
+   crittografia. È utilizzato per creare chiavi private, certificati,
+   CSRs (Certificate Signing Requests), e molto altro.
+
+2. *req*: Questo comando è usato per creare e processare richieste di
+   certificato in OpenSSL. Qui, sta per "request" e indica che stiamo
+   creando una nuova richiesta di certificato.
+
+3. *-x509*: Questa opzione dice a OpenSSL di creare un certificato
+   autofirmato invece di una CSR (Certificate Signing Request). Questo
+   certificato può essere utilizzato per impostare HTTPS durante le
+   fasi di sviluppo o nei contesti interni, ma non sarà valido per
+   l'uso su Internet poiché non è firmato da un'Autorità di
+   Certificazione riconosciuta.
+
+4. *-nodes*: Significa "no DES", il che indica che la chiave privata
+   generata NON sarà protetta da una passphrase. È spesso utilizzato
+   per certificati utilizzati in ambienti di server web per evitare di
+   dover inserire una passphrase ogni volta che il server web viene
+   avviato.
+
+5. *-days 365*: Specifica la durata del certificato. In questo caso,
+   il certificato sarà valido per 365 giorni dalla data di creazione.
+
+6. *-newkey rsa:2048*: Questa opzione indica a OpenSSL di generare una
+   nuova chiave privata e un nuovo certificato. `rsa:2048` significa
+   che verrà utilizzato l'algoritmo RSA e la chiave sarà lunga 2048
+   bit, che è un buon compromesso tra sicurezza e performance.
+
+7. *-keyout LAS/certs/site1.key*: Specifica il percorso e il nome del
+   file in cui verrà salvata la nuova chiave privata. In questo caso,
+   la chiave privata sarà salvata nel file `site1.key` all'interno
+   della directory `LAS/certs/`.
+
+8. *-out LAS/certs/site1.crt*: Indica dove salvare il certificato
+   autofirmato. Qui, il certificato sarà salvato come `site1.crt`
+   nella directory `LAS/certs/`.
+In sintesi, questo comando genera un certificato SSL autofirmato e una
+chiave privata, salvandoli nei percorsi specificati, e sono
+utilizzabili per configurare una connessione HTTPS su un server web. È
+importante notare che, poiché il certificato è autofirmato e non
+emesso da un'Authority di Certificazione (CA) riconosciuta, i browser
+web mostreranno un avviso di connessione non sicura quando si accede a
+un sito web che utilizza questo certificato.
+#+CAPTION: Comando per la creazione dei certificati SSL del primo sito.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot17.png]]
+Ora ripeto il procedimento per il secondo sito
+#+ATTR_LATEX: :options fontsize=\scriptsize
+#+begin_src shell
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout LAS/certs/site2.key -out LAS/certs/site2.crt
+#+end_src
+** Passo 4: Generare i file di configurazione di Apache
+
+Generiamo il file di configurazione in /LAS/conf/000-default.conf/.
+#+begin_src apache
+  <VirtualHost *:80>
+      ServerName site1.local
+      DocumentRoot /var/www/html/site1
+
+      ErrorLog ${APACHE_LOG_DIR}/error.log
+      CustomLog ${APACHE_LOG_DIR}/access.log combined
+  </VirtualHost>
+
+  <VirtualHost *:80>
+      ServerName site2.local
+      DocumentRoot /var/www/html/site2
+
+      ErrorLog ${APACHE_LOG_DIR}/error.log
+      CustomLog ${APACHE_LOG_DIR}/access.log combined
+  </VirtualHost>
+#+end_src
+
+*Blocco 1: Primo Virtual Host*
+- /<VirtualHost *:80>/: Inizia la definizione di un virtual host,
+  ascoltando sulla porta 80 per tutti gli indirizzi IP (/*/).
+
+- /ServerName site1.local/: Definisce il nome del server per questo
+  virtual host, che in questo caso è site1.local.
+
+- /DocumentRoot /var/www/html/site1/: Specifica la directory radice
+  dei documenti da cui Apache fornirà i file per questo virtual host.
+
+- /~ErrorLog ${APACHE_LOG_DIR}/error.log~/: Indica il percorso del
+  file di log per gli errori, dove ~${APACHE_LOG_DIR}~ è una variabile
+  d'ambiente che indica la directory di log di Apache.
+
+- /~CustomLog ${APACHE_LOG_DIR}/access.log combined~/: Indica il
+  percorso del file di log per le richieste di accesso, utilizzando il
+  formato di log "combined".
+
+- /</VirtualHost>/: Conclude la definizione del primo virtual host.
+
+*Blocco 2: Secondo Virtual Host*
+
+- Questo blocco (righe 7-12) replica la configurazione per un secondo
+  virtual host, denominato /site2.local/, con la /DocumentRoot/
+  impostata su /var/www/html/site2/.
+#+CAPTION: 000-default.conf.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot11.png]]
+Ora generiamo il file di configurazione in
+/LAS/conf/default-ssl.conf/.  La configurazione di Apache fornita si
+trova all'interno di un blocco ~<IfModule mod_ssl.c>~, che verifica se
+il modulo ~mod_ssl~ è caricato nell'ambiente Apache. ~mod_ssl~
+fornisce le funzionalità SSL/TLS a Apache. Se il modulo è presente,
+verranno attivate le configurazioni al suo interno.
+#+begin_src apache
+<IfModule mod_ssl.c>
+    <VirtualHost _default_:443>
+        ServerName site1.local
+        DocumentRoot /var/www/html/site1
+
+        SSLEngine on
+        SSLCertificateFile /etc/apache2/ssl/site1.crt
+        SSLCertificateKeyFile /etc/apache2/ssl/site1.key
+
+        ErrorLog ${APACHE_LOG_DIR}/error-site1.log
+        CustomLog ${APACHE_LOG_DIR}/access-siete1.log combined
+    </VirtualHost>
+
+    <VirtualHost _default_:443>
+        ServerName site2.local
+        DocumentRoot /var/www/html/site2
+
+        SSLEngine on
+        SSLCertificateFile /etc/apache2/ssl/site2.crt
+        SSLCertificateKeyFile /etc/apache2/ssl/site2.key
+
+        ErrorLog ${APACHE_LOG_DIR}/error-site2.log
+        CustomLog ${APACHE_LOG_DIR}/access-siete2.log combined
+    </VirtualHost>
+</IfModule>
+#+end_src
+*Blocco VirtualHost per /site1.local/:*
+- /~<VirtualHost _default_:443>~/: Questa configurazione sarà
+  applicata a tutte le richieste che arrivano sulla porta 443, la
+  porta standard per HTTPS, se non vi è una corrispondenza più
+  specifica.
+
+- /ServerName site1.local/: Specifca il nome del server per questo
+  VirtualHost.
+
+- /DocumentRoot /var/www/html/site1/: La root del documento, ovvero il
+  percorso in cui Apache cerca i file da servire per questo host
+  virtuale.
+
+- /SSLEngine on/: Attiva SSL/TLS per questo VirtualHost.
+
+- /SSLCertificateFile /etc/apache2/ssl/site1.crt/: Percorso del certificato SSL.
+
+- /SSLCertificateKeyFile /etc/apache2/ssl/site1.key/: Percorso della
+  chiave privata del certificato SSL.
+
+- /~ErrorLog ${APACHE_LOG_DIR}/error-site1.log~/: Percorso del file di
+  log per gli errori relativi a `site1.local`.
+
+- /~CustomLog ${APACHE_LOG_DIR}/access-site1.log combined~/: Percorso
+  del file di log per le richieste di accesso a /site1.local/ e
+  utilizza il formato di log "combined".
+
+*Blocco VirtualHost per /site2.local/:*
+-  Similarmente al blocco precedente, questo blocco VirtualHost
+  configura Apache per servire /site2.local/ su HTTPS.
+#+CAPTION: default-ssl.conf.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot12.png]]
+** Passo 5: Creazione dei due siti
+Generiamo ora il contenuto per il /sito1/ creando un file /index.php/
+nella directory /LAS/src/site1/ e facciamo lo stesso per il /sito2/ in
+/LAS/src/site2/index.php/.
+#+CAPTION: Codice del Sito1.
+#+begin_src html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site 1</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            padding: 20px;
+        }
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0px 0px 10px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Site 1</h1>
+        <form action="#" method="post">
+            <label for="name">Enter your name:</label>
+            <input type="text" id="name" name="name">
+            <input type="submit" value="Submit">
+        </form>
+        <?php
+        if ($_SERVER["REQUEST_METHOD"] == "POST") {
+            $name = htmlspecialchars($_POST["name"]);
+            echo "<p>Hello, $name!</p>";
+        }
+        ?>
+    </div>
+</body>
+</html>
+#+end_src
+#+CAPTION: index.php del Sito1.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot13.png]]
+#+CAPTION: Codice del Sito1.
+#+begin_src html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site 2</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #e0e0e0;
+            padding: 20px;
+        }
+        .container {
+            background-color: #333;
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0px 0px 10px rgba(0,0,0,0.4);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Site 2</h1>
+        <form action="#" method="post">
+            <label for="name">Enter your name:</label>
+            <input type="text" id="name" name="name">
+            <input type="submit" value="Submit">
+        </form>
+        <?php
+        if ($_SERVER["REQUEST_METHOD"] == "POST") {
+            $name = htmlspecialchars($_POST["name"]);
+            echo "<p>Nice to meet you, $name!</p>";
+        }
+        ?>
+    </div>
+</body>
+</html>
+#+end_src
+#+CAPTION: index.php del Sito2.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot14.png]]
+** Passo 6: Creare il Dockerfile
+
+Per poter creare una nostra immagine Docker abbiamo bisogno di creare
+un nostro Dockerfile nella root del progetto, in questo caso il file
+e' /LAS/Dockerfile/
+#+begin_src dockerfile
+FROM php:8.0-apache
+
+# Abilitare il modulo SSL e altre dipendenze necessarie
+RUN a2enmod ssl rewrite && a2ensite default-ssl
+
+# Copia i certificati, configurazioni e codice PHP
+COPY certs/ /etc/apache2/ssl/
+COPY conf/  /etc/apache2/sites-available/
+COPY src/   /var/www/html/
+
+EXPOSE 80 443
+
+CMD ["apache2-foreground"]
+#+end_src
+
+1. *FROM php:8.0-apache*
+   - Parte da un'immagine base che già ha PHP 8.0 e Apache
+     installati. Questa immagine è fornita ufficialmente e può essere
+     trovata su Docker Hub.
+
+2. *RUN a2enmod ssl rewrite && a2ensite default-ssl*
+   - /RUN/: Esegue i comandi all'interno del container durante la
+     costruzione dell'immagine.
+
+   - /a2enmod ssl rewrite/: Abilita i moduli /ssl/ e /rewrite/ in
+     Apache. Il modulo /ssl/ fornisce supporto per SSL/TLS, mentre
+     `rewrite` fornisce funzionalità per la riscrittura dell'URL.
+
+   - /&&/: Concatena i comandi in modo che se il primo comando
+     (/a2enmod ssl rewrite/) ha esito positivo, verrà eseguito il
+     secondo comando.
+
+   - /a2ensite default-ssl/: Abilita il sito /default-ssl/ che è una
+     configurazione predefinita fornita da Apache per servire siti su
+     HTTPS.
+
+3. *COPY certs/ /etc/apache2/ssl/*
+   - /COPY/: Copia file o directory dall'host al filesystem
+     dell'immagine.
+     
+   - /certs//: La directory (dal contesto di costruzione) che contiene
+     i certificati SSL.
+     
+   - //etc/apache2/ssl//: La posizione nella quale i certificati
+     vengono copiati nell'immagine Docker.
+
+4. *COPY conf/ /etc/apache2/sites-available/*
+   - Copia le configurazioni personalizzate di Apache (file /.conf/)
+     nella directory /sites-available/ nell'immagine Docker.
+
+5. *COPY src/ /var/www/html/*
+   - Copia il codice sorgente PHP (o altri file web) nel percorso root
+     del documento Apache nell'immagine Docker.
+
+6. *EXPOSE 80 443*
+   - Informa Docker che il container ascolterà sulle porte 80
+     e 443. Nota che /EXPOSE/ non rende le porte accessibili
+     dall'host. Per fare ciò, devi specificare le porte quando lanci
+     il container con l'opzione /-p/.
+
+7. *CMD ["apache2-foreground"]*
+   - /CMD/: Specifica il comando che sarà eseguito quando il container
+     viene avviato.
+
+   - /["apache2-foreground"]/: Esegue Apache in primo piano (non come
+     servizio/demone). Questo è importante nei container Docker perché
+     il container continua a eseguirsi finché il processo in primo
+     piano (in questo caso, Apache) è in esecuzione.
+#+CAPTION: Dockerfile.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot18.png]]
+** Passo 7: Modifica del file di hosts
+Per risolvere i problemi dei domini locali bisogna modificare il file
+//etc/hosts/ per poter distinguere tra /site1.local/ e /site2.local/
+aggiungendo le seguenti righe.
+#+begin_src unixconfig
+127.0.0.1 site1.local
+127.0.0.1 site2.local
+#+end_src
+#+CAPTION: File /etc/hosts modificato.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot10.png]]
+Essendo in macOS eseguo i seguenti comandi per svuotare la cache DNS
+#+begin_src shell
+sudo dscacheutil -flushcache
+sudo killall -HUP mDNSResponder
+#+end_src
+Ora sono in grado di vedere i due hosts, https://site1.local e
+https://site2.local.
+
+** Creazione e Avvio del Docker Container
+
+Una volta costruito il Dockerfile e creato un'immagine, puoi avviare
+un container basato su quell'immagine
+#+ATTR_LATEX: :options fontsize=\scriptsize
+#+begin_src shell
+docker build -t las-apache-php .
+#+end_src
+Ora per creare il nostro container e lanciarlo
+#+begin_src shell
+docker run -d -p 80:80 -p 443:443 las-apache-php
+#+end_src
+Aprendo il browser e navigando a https://site1.local ci si apre questa
+schermata
+#+CAPTION: Warning generato dal Sito1.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot19.png]]
+Accettando i rischi e continuando entriamo nel sito vero e proprio.
+#+CAPTION: Home page del Sito1.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot4.png]]
+Possiamo interaggire con il sito scrivendo un nome all'interno della
+casella e facendo submit questo e' il risultato
+#+CAPTION: Risultato della POST inserendo un nome nella FORM del Sito1.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot3.png]]
+Vediamo ora i certificati del Sito1
+#+CAPTION: Certificati del Sito1.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot8.png]]
+Ora navighiamo a https://site2.local
+#+CAPTION: Home page del Sito2.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot5.png]]
+Vediamo ora i certificati del Sito2
+#+CAPTION: Certificati del Sito2.
+#+ATTR_LATEX: :float nil :align c
+[[./img/screenshot9.png]]
+
+** Conclusione
+
+Complimenti! Hai navigato con successo attraverso il processo di
+creazione, configurazione e avvio di un container Docker per ospitare
+non uno, ma due siti locali con Apache e PHP. Da semplici linee di
+codice e comandi, hai costruito un ambiente virtualizzato che simulano
+situazioni reali, quali l'utilizzo dei certificati SSL e l'interazione
+con la pagina web attraverso una form. Questo setup non solo ti
+permette di testare le tue applicazioni in un ambiente isolato e
+sicuro, ma fornisce anche una solida base da cui poter sviluppare e
+sperimentare ulteriormente. Ricapitolando, hai:
+- Costruito un Dockerfile personalizzato.
+- Creato un'immagine Docker e avviato un container da essa.
+- Configurato Apache e PHP per ospitare due siti web locali.
+- Navigato attraverso di essi, sperimentando con certificati e
+  interazioni utente.
+
+*** Source Code
+
+- Repository GitHub https://github.com/MacPapo/php-apache-assl
+
+- Immagine del progetto in Docker Hub
+  https://hub.docker.com/r/macpapo/php-apache-assl/tags

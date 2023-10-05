@@ -110,7 +110,7 @@ mkdir -p LAS/src/site2
 Ora che abbiamo la struttura possiamo passare al prossimo passo
 #+CAPTION: Raffigurazione ad albero del progetto.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot16.png]]
+[[./.img/screenshot16.png]]
 ** Passo 3: Creare i certificati SSL
 Per generare certificati SSL auto-firmati, utilizzeremo
 *openssl*. Ecco un comando esemplificativo e una dettagliata
@@ -168,7 +168,7 @@ web mostreranno un avviso di connessione non sicura quando si accede a
 un sito web che utilizza questo certificato.
 #+CAPTION: Comando per la creazione dei certificati SSL del primo sito.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot17.png]]
+[[./.img/screenshot17.png]]
 Ora ripeto il procedimento per il secondo sito
 #+ATTR_LATEX: :options fontsize=\scriptsize
 #+begin_src shell
@@ -222,7 +222,7 @@ Generiamo il file di configurazione in /LAS/conf/000-default.conf/.
   impostata su /var/www/html/site2/.
 #+CAPTION: 000-default.conf.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot11.png]]
+[[./.img/screenshot11.png]]
 Ora generiamo il file di configurazione in
 /LAS/conf/default-ssl.conf/.  La configurazione di Apache fornita si
 trova all'interno di un blocco ~<IfModule mod_ssl.c>~, che verifica se
@@ -288,7 +288,7 @@ verranno attivate le configurazioni al suo interno.
   configura Apache per servire /site2.local/ su HTTPS.
 #+CAPTION: default-ssl.conf.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot12.png]]
+[[./.img/screenshot12.png]]
 ** Passo 5: Creazione dei due siti
 Generiamo ora il contenuto per il /sito1/ creando un file /index.php/
 nella directory /LAS/src/site1/ e facciamo lo stesso per il /sito2/ in
@@ -335,7 +335,7 @@ nella directory /LAS/src/site1/ e facciamo lo stesso per il /sito2/ in
 #+end_src
 #+CAPTION: index.php del Sito1.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot13.png]]
+[[./.img/screenshot13.png]]
 #+CAPTION: Codice del Sito1.
 #+begin_src html
 <!DOCTYPE html>
@@ -379,7 +379,7 @@ nella directory /LAS/src/site1/ e facciamo lo stesso per il /sito2/ in
 #+end_src
 #+CAPTION: index.php del Sito2.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot14.png]]
+[[./.img/screenshot14.png]]
 ** Passo 6: Creare il Dockerfile
 
 Per poter creare una nostra immagine Docker abbiamo bisogno di creare
@@ -456,7 +456,7 @@ CMD ["apache2-foreground"]
      piano (in questo caso, Apache) è in esecuzione.
 #+CAPTION: Dockerfile.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot18.png]]
+[[./.img/screenshot18.png]]
 ** Passo 7: Modifica del file di hosts
 Per risolvere i problemi dei domini locali bisogna modificare il file
 //etc/hosts/ per poter distinguere tra /site1.local/ e /site2.local/
@@ -467,7 +467,7 @@ aggiungendo le seguenti righe.
 #+end_src
 #+CAPTION: File /etc/hosts modificato.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot10.png]]
+[[./.img/screenshot10.png]]
 Essendo in macOS eseguo i seguenti comandi per svuotare la cache DNS
 #+begin_src shell
 sudo dscacheutil -flushcache
@@ -492,28 +492,28 @@ Aprendo il browser e navigando a https://site1.local ci si apre questa
 schermata
 #+CAPTION: Warning generato dal Sito1.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot19.png]]
+[[./.img/screenshot19.png]]
 Accettando i rischi e continuando entriamo nel sito vero e proprio.
 #+CAPTION: Home page del Sito1.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot4.png]]
+[[./.img/screenshot4.png]]
 Possiamo interaggire con il sito scrivendo un nome all'interno della
 casella e facendo submit questo e' il risultato
 #+CAPTION: Risultato della POST inserendo un nome nella FORM del Sito1.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot3.png]]
+[[./.img/screenshot3.png]]
 Vediamo ora i certificati del Sito1
 #+CAPTION: Certificati del Sito1.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot8.png]]
+[[./.img/screenshot8.png]]
 Ora navighiamo a https://site2.local
 #+CAPTION: Home page del Sito2.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot5.png]]
+[[./.img/screenshot5.png]]
 Vediamo ora i certificati del Sito2
 #+CAPTION: Certificati del Sito2.
 #+ATTR_LATEX: :float nil :align c
-[[./img/screenshot9.png]]
+[[./.img/screenshot9.png]]
 
 ** Conclusione
 
